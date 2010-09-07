@@ -31,8 +31,15 @@ class PDFKit
   
   def command
     args = [executable]
-    args += @options.to_a.flatten.compact
+    #only take options without hash-entry
+    args += @options.reject{ |key, value| value.class==Hash }.to_a.flatten.compact
     args << '--quiet'
+    #add hash entries after everything else
+    @options.reject{ |key, value| value.class!=Hash }.each do |key, value|
+      args << key
+      args << value[:url] if value.has_key?(:url)
+      args += value.reject { |key, value| key == :url }.to_a.flatten.compact
+    end
     
     if @source.html?
       args << '-' # Get HTML from stdin
@@ -109,13 +116,19 @@ class PDFKit
       end
     end
   
-    def normalize_options(options)
+    def normalize_options(options, can_ignore_keys = false)
       normalized_options = {}
 
       options.each do |key, value|
         next if !value
-        normalized_key = "--#{normalize_arg key}"
-        normalized_options[normalized_key] = normalize_value(value)
+        #filter hash values
+	if value.class == Hash
+          normalized_options[normalize_arg key] = normalize_options(value, true)
+        else
+          # ignore the key only in hashes
+          normalized_key = "--#{normalize_arg key}" unless can_ignore_keys and key == :url
+          normalized_options[normalized_key] = normalize_value(value)
+        end
       end
       normalized_options
     end
